@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+Sge-Type: agent
+Agent-Class: geheimlichagent.Geheimlichagent
+Agent-Name: Geheimlichagent
+
