@@ -4,8 +4,6 @@ import at.ac.tuwien.ifs.sge.util.pair.ImmutablePair;
 import at.ac.tuwien.ifs.sge.util.pair.Pair;
 import heimlich_and_co.HeimlichAndCo;
 import heimlich_and_co.actions.HeimlichAndCoAction;
-import heimlich_and_co.actions.HeimlichAndCoDieRollAction;
-import heimlich_and_co.enums.HeimlichAndCoPhase;
 
 import java.util.*;
 
@@ -40,6 +38,8 @@ public class MctsNode {
      */
     private final MctsNode parent;
 
+    private final Map<HeimlichAndCoAction, Double> weights;
+
     private final Random random;
     /**
      * saves how many wins were achieved from this node
@@ -67,6 +67,7 @@ public class MctsNode {
             this.depth = 0;
         }
         this.children = new HashMap<>();
+        this.weights = new HashMap<>(game.getPossibleActions().size());
         this.random = new Random();
     }
 
@@ -147,25 +148,52 @@ public class MctsNode {
 
         //TODO: calculate weights from last playout if necessary
 
-        //TODO: calculate probability for each action
+        var probabilities = calculateProbabilityForActions(possibleActions);
 
-        //TODO: Use probability to select action
+        //Choose one action according to the probability distribution
+        HeimlichAndCoAction selectedAction = getProbableAction(probabilities);
+        //initialize with random action
+        if (selectedAction == null) {
+            selectedAction = possibleActions.toArray(new HeimlichAndCoAction[1])[random.nextInt(possibleActions.size())];
+        }
 
         //TODO: Missing: update weight for each action
-
-        HeimlichAndCoAction selectedAction;
-        if (simulateAllDiceOutcomes && game.getCurrentPhase() == HeimlichAndCoPhase.DIE_ROLL_PHASE) {
-            possibleActions.remove(HeimlichAndCoDieRollAction.getRandomRollAction());
-            selectedAction = possibleActions.toArray(new HeimlichAndCoAction[1])[random.nextInt(possibleActions.size())];
-        } else {
-            List<HeimlichAndCoAction> maximumValuedActions = getMaximumValuedActions(possibleActions, this.actionComparatorUct);
-            selectedAction = maximumValuedActions.get(random.nextInt(maximumValuedActions.size()));
-        }
 
         if (this.children.containsKey(selectedAction)) {
             return this.children.get(selectedAction).selection(simulateAllDiceOutcomes);
         }
         return new ImmutablePair<>(this, selectedAction);
+    }
+
+    private HeimlichAndCoAction getProbableAction(Map<HeimlichAndCoAction, Double> probabilities) {
+        double p = Math.random();
+        double cumulativeProbability = 0.0;
+        for (var item : probabilities.entrySet()) {
+            cumulativeProbability += item.getValue();
+            if (p <= cumulativeProbability) {
+                return item.getKey();
+            }
+        }
+        return null;
+    }
+
+    private Map<HeimlichAndCoAction, Double> calculateProbabilityForActions(Set<HeimlichAndCoAction> possibleActions) {
+        Map<HeimlichAndCoAction, Double> probabilities = new HashMap<>();
+        double probabilitySum = 0;
+        for (HeimlichAndCoAction action : possibleActions) {
+            //TODO: Check if this is correct
+            double probability = (1 - C) * (weights.get(action) / weights.values().stream().reduce(0., Double::sum)) + C * (1 / possibleActions.size());
+            probabilities.put(action, probability);
+            probabilitySum += probability;
+        }
+        if (probabilitySum == 0) {
+            throw new IllegalStateException("Probability sum is 0");
+        }
+        //Normalize probabilities
+        for (HeimlichAndCoAction action : possibleActions) {
+            probabilities.put(action, probabilities.get(action) / probabilitySum);
+        }
+        return probabilities;
     }
 
     /**
