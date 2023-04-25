@@ -144,6 +144,15 @@ public class MctsNode {
         if (possibleActions.isEmpty()) {
             return new ImmutablePair<>(this, null);
         }
+
+        //TODO: calculate weights from last playout if necessary
+
+        //TODO: calculate probability for each action
+
+        //TODO: Use probability to select action
+
+        //TODO: Missing: update weight for each action
+
         HeimlichAndCoAction selectedAction;
         if (simulateAllDiceOutcomes && game.getCurrentPhase() == HeimlichAndCoPhase.DIE_ROLL_PHASE) {
             possibleActions.remove(HeimlichAndCoDieRollAction.getRandomRollAction());
