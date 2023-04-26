@@ -14,6 +14,7 @@ public class MctsNode {
      * The usually recommended value for this is square root of 2, but performance may be improved by changing it.
      */
     private static final double C = Math.sqrt(2);
+//    private static final double C = 0.1;
 
     /**
      * Saves the player id of the player for which the tree is build. I.e. the player for which the best action should
@@ -38,7 +39,8 @@ public class MctsNode {
      */
     private final MctsNode parent;
 
-    private final Map<HeimlichAndCoAction, Double> weights;
+    //TODO: Not public
+    public final Map<HeimlichAndCoAction, Double> weights;
 
     private final Random random;
     /**
@@ -51,6 +53,7 @@ public class MctsNode {
     private int playouts;
     private final Comparator<HeimlichAndCoAction> actionComparatorUct = Comparator.comparingDouble(this::calculateUCT);
     private final Comparator<HeimlichAndCoAction> actionComparatorQsa = Comparator.comparingDouble(this::calculateQsaOfChild);
+    private final Map<HeimlichAndCoAction, Double> probabilities;
 
     public MctsNode(int wins, int playouts, HeimlichAndCo game, MctsNode parent) {
         this(game, parent);
@@ -68,6 +71,7 @@ public class MctsNode {
         }
         this.children = new HashMap<>();
         this.weights = new HashMap<>(game.getPossibleActions().size());
+        this.probabilities = new HashMap<>(game.getPossibleActions().size());
         this.random = new Random();
     }
 
@@ -146,9 +150,11 @@ public class MctsNode {
             return new ImmutablePair<>(this, null);
         }
 
-        //TODO: calculate weights from last playout if necessary
+        //Update weights for all possible actions
+        updateWeights();
 
-        var probabilities = calculateProbabilityForActions(possibleActions);
+        //Calculate probability distribution for all possible actions
+        calculateProbabilityForActions(possibleActions);
 
         //Choose one action according to the probability distribution
         HeimlichAndCoAction selectedAction = getProbableAction(probabilities);
@@ -157,12 +163,33 @@ public class MctsNode {
             selectedAction = possibleActions.toArray(new HeimlichAndCoAction[1])[random.nextInt(possibleActions.size())];
         }
 
-        //TODO: Missing: update weight for each action
-
         if (this.children.containsKey(selectedAction)) {
             return this.children.get(selectedAction).selection(simulateAllDiceOutcomes);
         }
         return new ImmutablePair<>(this, selectedAction);
+    }
+
+    private void updateWeights() {
+        if (weights.isEmpty()) {
+            for (HeimlichAndCoAction action : game.getPossibleActions()) {
+                weights.put(action, 1.0);
+            }
+        } else {
+            double qSA;
+            if (this.game.getCurrentPlayer() == MctsNode.playerId) {
+                qSA = ((double) wins / playouts);
+            } else {
+                //if the current player is not the player we are maximizing for, we have to 'invert' the wins, as the
+                //other players of course do not want 'our' player to win. Meaning, they of course don't take the action
+                //which benefits 'our' player
+                qSA = ((double) (playouts - wins) / playouts);
+            }
+            for (var action : weights.keySet()) {
+                double estimatedReward = (qSA) / probabilities.get(action);
+                double nextWeight = weights.get(action) * Math.exp((C * estimatedReward) / weights.size());
+                weights.put(action, nextWeight);
+            }
+        }
     }
 
     private HeimlichAndCoAction getProbableAction(Map<HeimlichAndCoAction, Double> probabilities) {
@@ -178,7 +205,6 @@ public class MctsNode {
     }
 
     private Map<HeimlichAndCoAction, Double> calculateProbabilityForActions(Set<HeimlichAndCoAction> possibleActions) {
-        Map<HeimlichAndCoAction, Double> probabilities = new HashMap<>();
         double probabilitySum = 0;
         for (HeimlichAndCoAction action : possibleActions) {
             //TODO: Check if this is correct
