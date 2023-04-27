@@ -2,7 +2,7 @@
   <configuration default="false" name="Start_With_Every_Agent" type="JarApplication">
     <option name="JAR_PATH" value="$PROJECT_DIR$/libs/sge-1.0.4-dq-exe.jar" />
     <option name="PROGRAM_PARAMETERS" value="match libs/HeimlichAndCo-1.0.0.jar build/libs/Geheimlichagent-1.0.jar default_agents/HeimlichAndCoDepthSearchAgent-1.0.jar default_agents/HeimlichAndCoMCTSAgent-1.0.jar default_agents/HeimlichAndCoRandomAgent-1.0.jar -p 3 -b 0 -c 30 -dq" />
-    <option name="WORKING_DIRECTORY" value="D:\TU_Wien\6_Semester\SGP\sgp-geheimlichagent" />
+    <option name="WORKING_DIRECTORY" value="$ProjectFileDir$" />
     <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
     <option name="ALTERNATIVE_JRE_PATH" value="11.0.2" />
     <method v="2" />
