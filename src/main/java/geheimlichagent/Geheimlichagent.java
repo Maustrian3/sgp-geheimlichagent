@@ -37,7 +37,7 @@ public class Geheimlichagent extends AbstractGameAgent<HeimlichAndCo, HeimlichAn
 
     @Override
     public HeimlichAndCoAction computeNextAction(HeimlichAndCo game, long l, TimeUnit timeUnit) {
-        log.deb("MctsAgent: Computing next action\n");
+        log.deb("Geheimlichagent: Computing next action\n");
         super.setTimers(l, timeUnit);
 
         Set<HeimlichAndCoAction> possibleActions = game.getPossibleActions();
@@ -46,7 +46,7 @@ public class Geheimlichagent extends AbstractGameAgent<HeimlichAndCo, HeimlichAn
         }
 
         try {
-            log.deb("MctsAgent: Adding information to the game");
+            log.deb("Geheimlichagent: Adding information to the game");
             addInformationToGame(game);
 
             if (SIMULATE_ALL_DIE_OUTCOMES) {
@@ -54,21 +54,21 @@ public class Geheimlichagent extends AbstractGameAgent<HeimlichAndCo, HeimlichAn
             }
             MctsNode.setPlayerId(this.playerId);
             MctsNode tree = new MctsNode(0, 0, game, null);
-            log.deb("MctsAgent: Doing MCTS");
+            log.deb("Geheimlichagent: Doing MCTS");
             while (!this.shouldStopComputation()) {
                 Pair<MctsNode, HeimlichAndCoAction> selectionPair = mctsSelection(tree, SIMULATE_ALL_DIE_OUTCOMES);
                 MctsNode newNode = mctsExpansion(selectionPair.getA(), selectionPair.getB());
                 int win = mctsSimulation(newNode);
                 mctsBackpropagation(newNode, win);
             }
-            log.inf("MctsAgent: Playouts done from root node: " + tree.getPlayouts() + "\n");
-            log.inf("MctsAgent: Wins/playouts from selected child node: " + tree.getBestChild().getA().getWins() + "/" + tree.getBestChild().getA().getPlayouts() + "\n");
-            log.inf("MctsAgent: Q(s,a) of chosen action: " + tree.calculateQsaOfChild(tree.getBestChild().getB()) + "\n");
+            log.inf("Geheimlichagent: Playouts done from root node: " + tree.getPlayouts() + "\n");
+            log.inf("Geheimlichagent: Wins/playouts from selected child node: " + tree.getBestChild().getA().getWins() + "/" + tree.getBestChild().getA().getPlayouts() + "\n");
+            log.inf("Geheimlichagent: Q(s,a) of chosen action: " + tree.calculateQsaOfChild(tree.getBestChild().getB()) + "\n");
             return tree.getBestChild().getB();
 
         } catch (Exception ex) {
             log.err(ex);
-            log.err("MctsAgent: An error occurred while calculating the best action. Playing a random action.\n");
+            log.err("Geheimlichagent: An error occurred while calculating the best action. Playing a random action.\n");
         }
         //If an exception is encountered, we play a random action s.t. we do not automatically lose the game
         HeimlichAndCoAction[] actions = game.getPossibleActions().toArray(new HeimlichAndCoAction[0]);
@@ -103,17 +103,17 @@ public class Geheimlichagent extends AbstractGameAgent<HeimlichAndCo, HeimlichAn
     }
 
     private void mctsBackpropagation(MctsNode node, int win) {
-        log.deb("MctsAgent: In Backpropagation\n");
+        log.deb("Geheimlichagent: In Backpropagation\n");
         node.backpropagation(win);
     }
 
     private MctsNode mctsExpansion(MctsNode node, HeimlichAndCoAction action) {
-        log.deb("MctsAgent: In Expansion\n");
+        log.deb("Geheimlichagent: In Expansion\n");
         return node.expansion(action);
     }
 
     private Pair<MctsNode, HeimlichAndCoAction> mctsSelection(MctsNode node, boolean simulateAllDieOutcomes) {
-        log.deb("MctsAgent: In Selection\n");
+        log.deb("Geheimlichagent: In Selection\n");
         return node.selection(simulateAllDieOutcomes);
     }
 
@@ -125,7 +125,7 @@ public class Geheimlichagent extends AbstractGameAgent<HeimlichAndCo, HeimlichAn
      * @return 1 or 0, depending on whether the agent belonging to the player of this agent wins
      */
     private int mctsSimulation(MctsNode node) {
-        log.deb("MctsAgent: In Simulation\n");
+        log.deb("Geheimlichagent: In Simulation\n");
         HeimlichAndCo game = new HeimlichAndCo(node.getGame());
         //use a termination depth were the game is evaluated and stopped
         int simulationDepth = 0;

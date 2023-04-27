@@ -4,7 +4,9 @@ import at.ac.tuwien.ifs.sge.util.pair.ImmutablePair;
 import at.ac.tuwien.ifs.sge.util.pair.Pair;
 import heimlich_and_co.HeimlichAndCo;
 import heimlich_and_co.actions.HeimlichAndCoAction;
+import heimlich_and_co.actions.HeimlichAndCoAgentMoveAction;
 import heimlich_and_co.actions.HeimlichAndCoDieRollAction;
+import heimlich_and_co.enums.Agent;
 import heimlich_and_co.enums.HeimlichAndCoPhase;
 
 import java.util.*;
@@ -140,16 +142,17 @@ public class MctsNode {
      */
     public Pair<MctsNode, HeimlichAndCoAction> selection(boolean simulateAllDiceOutcomes) {
         Set<HeimlichAndCoAction> possibleActions = game.getPossibleActions();
+        Set<HeimlichAndCoAction> reducedPossibleActions = getReducedPossibleActions(possibleActions);
         // this means that this is a terminal game state
-        if (possibleActions.isEmpty()) {
+        if (reducedPossibleActions.isEmpty()) {
             return new ImmutablePair<>(this, null);
         }
         HeimlichAndCoAction selectedAction;
         if (simulateAllDiceOutcomes && game.getCurrentPhase() == HeimlichAndCoPhase.DIE_ROLL_PHASE) {
-            possibleActions.remove(HeimlichAndCoDieRollAction.getRandomRollAction());
-            selectedAction = possibleActions.toArray(new HeimlichAndCoAction[1])[random.nextInt(possibleActions.size())];
+            reducedPossibleActions.remove(HeimlichAndCoDieRollAction.getRandomRollAction()); // remove the dice roll 0
+            selectedAction = reducedPossibleActions.toArray(new HeimlichAndCoAction[1])[random.nextInt(reducedPossibleActions.size())];
         } else {
-            List<HeimlichAndCoAction> maximumValuedActions = getMaximumValuedActions(possibleActions, this.actionComparatorUct);
+            List<HeimlichAndCoAction> maximumValuedActions = getMaximumValuedActions(reducedPossibleActions, this.actionComparatorUct);
             selectedAction = maximumValuedActions.get(random.nextInt(maximumValuedActions.size()));
         }
 
@@ -157,6 +160,107 @@ public class MctsNode {
             return this.children.get(selectedAction).selection(simulateAllDiceOutcomes);
         }
         return new ImmutablePair<>(this, selectedAction);
+    }
+
+    /**
+     * get reduced possible actions in AGENT_MOVE_PHASE
+     * only the player itself should be moved or the one with the lowest score
+     *
+     * @param possibleActions
+     * @return actions where the player is moved or the one with the lowest score
+     */
+    private Set<HeimlichAndCoAction> getReducedPossibleActions(Set<HeimlichAndCoAction> possibleActions) {
+        if (!(game.getCurrentPhase() == HeimlichAndCoPhase.AGENT_MOVE_PHASE)) {
+            return possibleActions;
+        }
+        Agent geheimlichAgent = this.game.getBoard().getAgents()[MctsNode.playerId];
+        Agent[] validAgents = this.game.getBoard().getAgents();
+        validAgents = Arrays.stream(validAgents).filter(agent -> agent != geheimlichAgent).toArray(Agent[]::new);
+        Agent worstAgent = getWorstAgent(validAgents);
+
+        return getPossibleAllowedActions(geheimlichAgent, worstAgent);
+    }
+
+    /**
+     * Get the agent with the lowest score from the valid agents given
+     *
+     * @param validAgents valid agents
+     * @return the agent with the lowest score
+     */
+    private Agent getWorstAgent(Agent[] validAgents) {
+        if (validAgents.length == 0) {
+            throw new IllegalStateException("No valid agents given.");
+        }
+        Map<Agent, Integer> scores = this.game.getBoard().getScores();
+        for (Agent agent : validAgents) {
+            if (scores.get(agent).equals(Collections.min(scores.values()))) {
+                return agent;
+            }
+        }
+        throw new IllegalStateException("No agent with the minimum score found.");
+    }
+
+    /**
+     * Calculates all possible allowed actions depending on the given agents
+     * <p>
+     * This method was partly taken from the HeimlichAndCoAgentMoveAction class
+     *
+     * @param geheimlichAgent Agent of the gheimlichagent
+     * @param worstAgent Agent with the lowest score
+     * @return a Set of HeimlichAndCoActions which are possible actions in the current state
+     */
+    private Set<HeimlichAndCoAction> getPossibleAllowedActions(Agent geheimlichAgent, Agent worstAgent) {
+        int dieResult = this.game.getBoard().getLastDieRoll();
+
+        List<Integer> possibleAmountOfMoves = new LinkedList<>();
+        Set<HeimlichAndCoAction> retSet = new HashSet<>();
+        if (dieResult == 13) {
+            possibleAmountOfMoves.add(1);
+            possibleAmountOfMoves.add(2);
+            possibleAmountOfMoves.add(3);
+//            if (withCards) { // TODO implement option with cards
+//                retSet.add(getNoMoveAction());
+//            }
+        } else {
+            possibleAmountOfMoves.add(dieResult);
+        }
+
+        // TODO Add code to consider more than just 2 agents
+        Agent[] playingAgents = {geheimlichAgent, worstAgent};
+        for (Integer dieRoll : possibleAmountOfMoves) {
+            for (int agent0 = dieRoll; agent0 >= 0; agent0--) {
+                int rem = dieRoll - agent0;
+                //all remaining points have to be given to the remaining agent
+                Map<Agent, Integer> agentsMoves = agentsMoveHelper(playingAgents, agent0, rem);
+                retSet.add(new HeimlichAndCoAgentMoveAction(agentsMoves));
+            }
+        }
+        return retSet;
+    }
+
+    /**
+     * creates a Map with Pairs of entries denoting moves for agents
+     * <p>
+     * This method was taken from the HeimlichAndCoAgentMoveAction class
+     *
+     * @param playingAgents Array of agents that are playing
+     * @param agentsMoves   integers denoting the amount the corresponding agent should be moved forward
+     * @return Map denoting moves for agents
+     */
+    private static Map<Agent, Integer> agentsMoveHelper(Agent[] playingAgents, int... agentsMoves) {
+        if (playingAgents.length != agentsMoves.length) {
+            throw new IllegalArgumentException("There must be the same amount of agents and numbers given.");
+        } else {
+            EnumMap<Agent, Integer> agentsMovesMap = new EnumMap<>(Agent.class);
+
+            for (int i = 0; i < agentsMoves.length; ++i) {
+                if (agentsMoves[i] > 0) {
+                    agentsMovesMap.put(playingAgents[i], agentsMoves[i]);
+                }
+            }
+
+            return agentsMovesMap;
+        }
     }
 
     /**
