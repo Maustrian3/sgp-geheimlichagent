@@ -13,8 +13,8 @@ public class MctsNode {
      * This constant balances between exploration and exploitation.
      * The usually recommended value for this is square root of 2, but performance may be improved by changing it.
      */
-    private static final double C = Math.sqrt(2);
-//    private static final double C = 0.1;
+//    private static final double C = Math.sqrt(2);
+    private static final double C = 0.5;
 
     /**
      * Saves the player id of the player for which the tree is build. I.e. the player for which the best action should
@@ -51,6 +51,7 @@ public class MctsNode {
      * saves how many playouts were done from this node (or descendents of this node)
      */
     private int playouts;
+    double probabilitySum = 0;
     private final Comparator<HeimlichAndCoAction> actionComparatorUct = Comparator.comparingDouble(this::calculateUCT);
     private final Comparator<HeimlichAndCoAction> actionComparatorQsa = Comparator.comparingDouble(this::calculateQsaOfChild);
     private final Map<HeimlichAndCoAction, Double> probabilities;
@@ -149,6 +150,12 @@ public class MctsNode {
         if (possibleActions.isEmpty()) {
             return new ImmutablePair<>(this, null);
         }
+        //Initialize weights for all possible actions if not already done
+        if (weights.isEmpty()) {
+            for (HeimlichAndCoAction action : game.getPossibleActions()) {
+                weights.put(action, 1.0);
+            }
+        }
 
         //Update weights for all possible actions
         updateWeights();
@@ -170,32 +177,33 @@ public class MctsNode {
     }
 
     private void updateWeights() {
-        if (weights.isEmpty()) {
-            for (HeimlichAndCoAction action : game.getPossibleActions()) {
-                weights.put(action, 1.0);
-            }
+        double qSA;
+        if (this.game.getCurrentPlayer() == MctsNode.playerId) {
+            qSA = ((double) wins / playouts);
         } else {
-            double qSA;
-            if (this.game.getCurrentPlayer() == MctsNode.playerId) {
-                qSA = ((double) wins / playouts);
-            } else {
-                //if the current player is not the player we are maximizing for, we have to 'invert' the wins, as the
-                //other players of course do not want 'our' player to win. Meaning, they of course don't take the action
-                //which benefits 'our' player
-                qSA = ((double) (playouts - wins) / playouts);
-            }
-            for (var action : weights.keySet()) {
-                double estimatedReward = (qSA) / probabilities.get(action);
-                double nextWeight = weights.get(action) * Math.exp((C * estimatedReward) / weights.size());
-                weights.put(action, nextWeight);
-            }
+            //if the current player is not the player we are maximizing for, we have to 'invert' the wins, as the
+            //other players of course do not want 'our' player to win. Meaning, they of course don't take the action
+            //which benefits 'our' player
+            qSA = ((double) (playouts - wins) / playouts);
+        }
+        for (var action : weights.keySet()) {
+            double estimatedReward = (qSA) / probabilities.get(action);
+            double nextWeight = weights.get(action) * Math.exp(C * estimatedReward / weights.size());
+            weights.put(action, nextWeight);
         }
     }
 
     private HeimlichAndCoAction getProbableAction(Map<HeimlichAndCoAction, Double> probabilities) {
         double p = Math.random();
         double cumulativeProbability = 0.0;
-        for (var item : probabilities.entrySet()) {
+
+        Map<HeimlichAndCoAction, Double> scaledProbabilities = new HashMap<>();
+        //Normalize probabilities
+        for (HeimlichAndCoAction action : weights.keySet()) {
+            scaledProbabilities.put(action, probabilities.get(action) / probabilitySum);
+        }
+
+        for (var item : scaledProbabilities.entrySet()) {
             cumulativeProbability += item.getValue();
             if (p <= cumulativeProbability) {
                 return item.getKey();
@@ -205,19 +213,15 @@ public class MctsNode {
     }
 
     private Map<HeimlichAndCoAction, Double> calculateProbabilityForActions(Set<HeimlichAndCoAction> possibleActions) {
-        double probabilitySum = 0;
+        probabilitySum = 0;
         for (HeimlichAndCoAction action : possibleActions) {
             //TODO: Check if this is correct
-            double probability = (1 - C) * (weights.get(action) / weights.values().stream().reduce(0., Double::sum)) + C * (1 / possibleActions.size());
+            double probability = (1 - C) * (weights.get(action) / weights.values().stream().reduce(0., Double::sum)) + C / possibleActions.size();
             probabilities.put(action, probability);
             probabilitySum += probability;
         }
         if (probabilitySum == 0) {
             throw new IllegalStateException("Probability sum is 0");
-        }
-        //Normalize probabilities
-        for (HeimlichAndCoAction action : possibleActions) {
-            probabilities.put(action, probabilities.get(action) / probabilitySum);
         }
         return probabilities;
     }
