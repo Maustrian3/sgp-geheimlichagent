@@ -17,7 +17,7 @@ public class Geheimlichagent extends AbstractGameAgent<HeimlichAndCo, HeimlichAn
      * determines the depth of termination for random playouts
      * can be set to -1 to always play out till the game ends
      */
-    private static final int TERMINATION_DEPTH = 64;
+    private static final int TERMINATION_DEPTH = 128;
 
     /**
      * Determines the strategy for dealing with the randomness of a die roll.
