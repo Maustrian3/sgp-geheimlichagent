@@ -16,6 +16,7 @@ public class MctsNode {
      * The usually recommended value for this is square root of 2, but performance may be improved by changing it.
      */
     private static final double C = Math.sqrt(2);
+    private static final double LAMBDA = 0.5;
 
     /**
      * Saves the player id of the player for which the tree is build. I.e. the player for which the best action should
@@ -49,6 +50,8 @@ public class MctsNode {
      * saves how many playouts were done from this node (or descendents of this node)
      */
     private int playouts;
+
+    public double extraQsa;
     private final Comparator<HeimlichAndCoAction> actionComparatorUct = Comparator.comparingDouble(this::calculateUCT);
     private final Comparator<HeimlichAndCoAction> actionComparatorQsa = Comparator.comparingDouble(this::calculateQsaOfChild);
 
@@ -84,10 +87,23 @@ public class MctsNode {
         if (win != 0 && win != 1) {
             throw new IllegalArgumentException("Win must be either 1 or 0");
         }
+        this.backpropagation(win, 0);
+    }
+
+    private void backpropagation(int win, double cumulativeReturn) {
         this.playouts++;
         this.wins += win;
+
+        cumulativeReturn += win;
+        double deltaQ = cumulativeReturn - (extraQsa + ((double) win / this.playouts));
+        extraQsa += deltaQ / playouts;
+        if (children.isEmpty()) {
+            cumulativeReturn = (1 - LAMBDA) * extraQsa + LAMBDA * cumulativeReturn;
+        } else {
+            cumulativeReturn = (1 - LAMBDA) * getBestChild().getA().extraQsa + LAMBDA * cumulativeReturn;
+        }
         if (this.parent != null) {
-            this.parent.backpropagation(win);
+            this.parent.backpropagation(win, cumulativeReturn);
         }
     }
 
@@ -106,6 +122,7 @@ public class MctsNode {
             throw new IllegalArgumentException("Action is not contained in children");
         }
         return ((double) children.get(action).wins) / children.get(action).playouts;
+//        return children.get(action).extraQsa;
     }
 
     /**
