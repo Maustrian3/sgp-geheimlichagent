@@ -6,6 +6,7 @@ import heimlich_and_co.HeimlichAndCo;
 import heimlich_and_co.actions.HeimlichAndCoAction;
 import heimlich_and_co.actions.HeimlichAndCoAgentMoveAction;
 import heimlich_and_co.actions.HeimlichAndCoDieRollAction;
+import heimlich_and_co.actions.HeimlichAndCoSafeMoveAction;
 import heimlich_and_co.enums.Agent;
 import heimlich_and_co.enums.HeimlichAndCoPhase;
 
@@ -224,37 +225,60 @@ public class MctsNode {
 
             double nS = this.playouts;
             double nSA = child.playouts;
-            double UCTValue = qSA + C * Math.sqrt(Math.log(nS) / nSA);
+            double uctValue = qSA + C * Math.sqrt(Math.log(nS) / nSA);
 
             // Add domain knowledge
-            // TODO How to include the inverted wins?
-            if (game.getCurrentPhase() == HeimlichAndCoPhase.AGENT_MOVE_PHASE) {
-                final HeimlichAndCoAgentMoveAction moveAction = (HeimlichAndCoAgentMoveAction) action;
-                final EnumMap<Agent, Integer> movesMap = ActionHelper.getAgentMovesFromMoveAction(moveAction);
-                final int curPos = game.getBoard().getAgentsPositions().get(Agent.values()[game.getCurrentPlayer()]);
+            // Only add domain knowledge if the current player is the player we are maximizing for
+            if (this.game.getCurrentPlayer() == MctsNode.playerId) {
+                if (game.getCurrentPhase() == HeimlichAndCoPhase.AGENT_MOVE_PHASE) {
+                    uctValue = addFieldValueKnowledge(uctValue, action);
+                }
 
-                // Move groups
-                ArrayList<Integer> lowPos = new ArrayList<>(List.of(11, 0, 1, 2, 3)); // 11 is the ruins field (-3)
-                ArrayList<Integer> midPos = new ArrayList<>(List.of(4, 5, 6, 7));
-                ArrayList<Integer> highPos = new ArrayList<>(List.of(8, 9, 10));
-
-                // Boost action where own agent is moved to higher value field or more secure field
-                if (movesMap.containsKey(Agent.values()[game.getCurrentPlayer()])) {
-                    final int newPos = movesMap.get(Agent.values()[game.getCurrentPlayer()]);
-
-                    if (lowPos.contains(newPos)) {
-                        UCTValue *= 0.8; // TODO adjust value
-                    } else if (midPos.contains(newPos)) {
-                        UCTValue *= 1.4; // TODO adjust value
-                    } else if (highPos.contains(newPos)) {
-                        UCTValue *= 1.2; // TODO adjust value
-                    }
+                if (game.getCurrentPhase() == HeimlichAndCoPhase.SAFE_MOVE_PHASE) {
+                    uctValue = addSafeMoveFieldValueKnowledge(uctValue, action);
                 }
             }
 
-            return UCTValue;
+            return uctValue;
         }
         return Double.MAX_VALUE;
+    }
+
+    private double addSafeMoveFieldValueKnowledge(double uctValue, HeimlichAndCoAction action) {
+        final HeimlichAndCoSafeMoveAction safeMoveAction = (HeimlichAndCoSafeMoveAction) action;
+        final int newSafePos = ActionHelper.getSafeLocationFromSafeMoveAction(safeMoveAction);
+        if (newSafePos == 11) { // Always move safe to ruins to penalize the one finding it
+            return uctValue * 1.5;
+        } else {
+            return uctValue * 0.8;
+        }
+    }
+
+    private double addFieldValueKnowledge(double uctValue, HeimlichAndCoAction action) {
+        final HeimlichAndCoAgentMoveAction moveAction = (HeimlichAndCoAgentMoveAction) action;
+        final EnumMap<Agent, Integer> movesMap = ActionHelper.getAgentMovesFromMoveAction(moveAction);
+        final int curPos = game.getBoard().getAgentsPositions().get(Agent.values()[game.getCurrentPlayer()]);
+
+        // Move groups
+        ArrayList<Integer> lowPos = new ArrayList<>(List.of(11, 0, 1, 2, 3)); // 11 is the ruins field (-3)
+        ArrayList<Integer> midPos = new ArrayList<>(List.of(4, 5, 6, 7));
+        ArrayList<Integer> highPos = new ArrayList<>(List.of(8, 9, 10));
+
+        // Boost action where own agent is moved to higher value field or more secure field
+        if (movesMap.containsKey(Agent.values()[game.getCurrentPlayer()])) {
+            final int newPos = movesMap.get(Agent.values()[game.getCurrentPlayer()]);
+
+            if (lowPos.contains(newPos)) { // TODO tested with 0.8, 1.4, 1.2: not 3/10 won
+                return (uctValue * 0.5); // TODO adjust value
+            }
+            if (midPos.contains(newPos)) {
+                return (uctValue * 1.7); // TODO adjust value
+            }
+            if (highPos.contains(newPos)) {
+                return (uctValue * 1.5); // TODO adjust value
+            }
+        }
+        return uctValue;
     }
 
     /**

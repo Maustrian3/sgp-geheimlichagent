@@ -1,6 +1,7 @@
 package geheimlichagent;
 
 import heimlich_and_co.actions.HeimlichAndCoAgentMoveAction;
+import heimlich_and_co.actions.HeimlichAndCoSafeMoveAction;
 import heimlich_and_co.enums.Agent;
 
 import java.util.EnumMap;
@@ -23,5 +24,12 @@ public class ActionHelper {
             agentMoves.put(name, value);
         }
         return agentMoves;
+    }
+
+    public static int getSafeLocationFromSafeMoveAction(HeimlichAndCoSafeMoveAction action) {
+        String safeMoveActionString = action.toString();
+        String[] parts = safeMoveActionString.split(" ");
+        final int newSafePosition = Integer.parseInt(parts[parts.length - 1]);
+        return newSafePosition;
     }
 }

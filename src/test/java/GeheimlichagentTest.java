@@ -20,11 +20,12 @@ public class GeheimlichagentTest {
                 ProcessBuilder pb = new ProcessBuilder(
                         "java", "-jar", ".\\libs\\sge-1.0.4-dq-exe.jar",
                         "match", "libs/HeimlichAndCo-1.0.0.jar",
+                        "build/libs/Geheimlichagent-1.0.jar",
+                        "default_agents/HeimlichAndCoMCTSAgent-1.0.jar",
                         "default_agents/HeimlichAndCoRandomAgent-1.0.jar",
-                        "default_agents/HeimlichAndCoDepthSearchAgent-1.0.jar",
-                        "-p", "2",  // 2 players
+                        "-p", "3",  // x players
                         "-b", "0",  // use default board
-                        "-c", "30", // 30 seconds timeout
+                        "-c", "10", // xx seconds timeout
                         "-dq"       // timeout disqualifying enabled
                 );
                 pb.redirectOutput(new File(filePath + filename));
