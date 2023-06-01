@@ -34,3 +34,6 @@
 /.idea/sgp-geheimlichagent.iml
 /.idea/vcs.xml
 /.idea/workspace.xml
+/.gradle/
+/.idea/
+/build/
