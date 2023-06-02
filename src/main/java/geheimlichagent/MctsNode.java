@@ -5,6 +5,7 @@ import at.ac.tuwien.ifs.sge.util.pair.Pair;
 import heimlich_and_co.HeimlichAndCo;
 import heimlich_and_co.actions.HeimlichAndCoAction;
 import heimlich_and_co.actions.HeimlichAndCoDieRollAction;
+import heimlich_and_co.enums.Agent;
 import heimlich_and_co.enums.HeimlichAndCoPhase;
 
 import java.util.*;
@@ -35,6 +36,10 @@ public class MctsNode {
      * A child node is reached by taking (applying) the action that is used as the key.
      */
     private final Map<HeimlichAndCoAction, MctsNode> children;
+    /**
+     *  All child group nodes
+     */
+    private final ArrayList<GroupNode> childGroups;
     /**
      * parent of this node; null for root node
      */
@@ -67,6 +72,7 @@ public class MctsNode {
             this.depth = 0;
         }
         this.children = new HashMap<>();
+        this.childGroups = new ArrayList<>();
         this.random = new Random();
     }
 
@@ -149,6 +155,34 @@ public class MctsNode {
             possibleActions.remove(HeimlichAndCoDieRollAction.getRandomRollAction());
             selectedAction = possibleActions.toArray(new HeimlichAndCoAction[1])[random.nextInt(possibleActions.size())];
         } else {
+            // Get curr player pos
+            final int curPos = game.getBoard().getAgentsPositions().get(Agent.values()[game.getCurrentPlayer()]);
+            // Get die roll (or extract it from the possible actions?)
+            final int dieRoll = this.game.getBoard().getLastDieRoll();
+
+            // get possible groups (3 groups)
+            if(this.childGroups.isEmpty()) {
+                this.childGroups.add(new GroupNode(game), 11, 4);
+                this.childGroups.add(new GroupNode(game), 5, 7);
+                this.childGroups.add(new GroupNode(game), 8, 10);
+            }
+            // (method) get maximum valued group
+            GroupNode maxGroup = moveGroups.getMaximumValuedGroups();
+            // get maximum valued action in that group
+            maxGroup.getMaximumValuedActions();
+
+            // Continue as usual
+
+            // When Move phase is
+            // Group move actions into groups:
+            // move own agent to a high field
+            // move own agent to a mid field
+            // move own agent to a low field
+            // By filtering moves to the range of tiles it could move when rolled?
+            // Eg. to get into high: 3-6
+            //     to get into medium 2-3
+            //     to get into low 0-1
+
             List<HeimlichAndCoAction> maximumValuedActions = getMaximumValuedActions(possibleActions, this.actionComparatorUct);
             selectedAction = maximumValuedActions.get(random.nextInt(maximumValuedActions.size()));
         }
