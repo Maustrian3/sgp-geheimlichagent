@@ -152,6 +152,9 @@ public class Geheimlichagent extends AbstractGameAgent<HeimlichAndCo, HeimlichAn
                 game.getCards().put(player, new LinkedList<>()); //other players do not get cards for now
             }
         }
+        for (var agent : agentToPlayerPoints.keySet()) {
+            playersToAgentsMap.put(agentToPlayerPoints.get(agent).getA(), agent);
+        }
 
         log.inf(agentToPlayerPoints);
         //assign agents to agentToPlayer map
