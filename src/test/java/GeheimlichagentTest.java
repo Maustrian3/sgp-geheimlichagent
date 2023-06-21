@@ -7,7 +7,7 @@ import java.util.Date;
 
 public class GeheimlichagentTest {
 
-    private static final int TEST_COUNT = 10;
+    private static final int TEST_COUNT = 15;
     private DateFormat dateFormat = new SimpleDateFormat("dd_MM_yy_HH_mm");
 
     @Test
@@ -25,7 +25,7 @@ public class GeheimlichagentTest {
                         "default_agents/HeimlichAndCoMCTSAgent-1.0.jar",
                         "-p", "3",  // 2 players
                         "-b", "0",  // use default board
-                        "-c", "10", // 30 seconds timeout
+                        "-c", "30", // 30 seconds timeout
                         "-dq"       // timeout disqualifying enabled
                 );
                 pb.redirectOutput(new File(filePath + filename));

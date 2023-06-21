@@ -187,13 +187,27 @@ public class MctsNode {
                     }
             }
 
+//            // Get maximum valued group
+//            // by calculating the uct just of a sample of actions of each group
+//            ArrayList<HeimlichAndCoAction> bestGroup = this.lowGroup;
+//            if(calculateGroupUCT(this.midGroup) > calculateGroupUCT(bestGroup)) {
+//                bestGroup = midGroup;
+//            }
+//            if(calculateGroupUCT(this.highGroup) > calculateGroupUCT(bestGroup)) {
+//                bestGroup = highGroup;
+//            }
+//            if (bestGroup.isEmpty()) {
+//                throw new IllegalStateException("There are no actions in the chosen best group");
+//            }
+
             // Get maximum valued group
-            // by calculating the uct just of a sample of actions of each group
+            // by choosing the larger groups first (as described in the sgp-slides)
+            // TODO maybe add a random factor to this? (not only choose the largest group directly)
             ArrayList<HeimlichAndCoAction> bestGroup = this.lowGroup;
-            if(calculateGroupUCT(this.midGroup) > calculateGroupUCT(bestGroup)) {
+            if(this.midGroup.size() > bestGroup.size()) {
                 bestGroup = midGroup;
             }
-            if(calculateGroupUCT(this.highGroup) > calculateGroupUCT(bestGroup)) {
+            if(this.highGroup.size() > bestGroup.size()) {
                 bestGroup = highGroup;
             }
             if (bestGroup.isEmpty()) {
