@@ -4,6 +4,7 @@ import at.ac.tuwien.ifs.sge.util.pair.ImmutablePair;
 import at.ac.tuwien.ifs.sge.util.pair.Pair;
 import heimlich_and_co.HeimlichAndCo;
 import heimlich_and_co.actions.HeimlichAndCoAction;
+import heimlich_and_co.actions.HeimlichAndCoAgentMoveAction;
 import heimlich_and_co.actions.HeimlichAndCoDieRollAction;
 import heimlich_and_co.enums.Agent;
 import heimlich_and_co.enums.HeimlichAndCoPhase;
@@ -37,9 +38,11 @@ public class MctsNode {
      */
     private final Map<HeimlichAndCoAction, MctsNode> children;
     /**
-     *  All child group nodes
+     * All child group nodes
      */
-    private final ArrayList<GroupNode> childGroups;
+    private ArrayList<HeimlichAndCoAction> lowGroup;
+    private ArrayList<HeimlichAndCoAction> midGroup;
+    private ArrayList<HeimlichAndCoAction> highGroup;
     /**
      * parent of this node; null for root node
      */
@@ -49,11 +52,11 @@ public class MctsNode {
     /**
      * saves how many wins were achieved from this node
      */
-    private int wins;
+    public int wins;
     /**
      * saves how many playouts were done from this node (or descendents of this node)
      */
-    private int playouts;
+    public int playouts;
     private final Comparator<HeimlichAndCoAction> actionComparatorUct = Comparator.comparingDouble(this::calculateUCT);
     private final Comparator<HeimlichAndCoAction> actionComparatorQsa = Comparator.comparingDouble(this::calculateQsaOfChild);
 
@@ -72,7 +75,9 @@ public class MctsNode {
             this.depth = 0;
         }
         this.children = new HashMap<>();
-        this.childGroups = new ArrayList<>();
+        this.lowGroup = new ArrayList<>();
+        this.midGroup = new ArrayList<>();
+        this.highGroup = new ArrayList<>();
         this.random = new Random();
     }
 
@@ -154,35 +159,50 @@ public class MctsNode {
         if (simulateAllDiceOutcomes && game.getCurrentPhase() == HeimlichAndCoPhase.DIE_ROLL_PHASE) {
             possibleActions.remove(HeimlichAndCoDieRollAction.getRandomRollAction());
             selectedAction = possibleActions.toArray(new HeimlichAndCoAction[1])[random.nextInt(possibleActions.size())];
-        } else {
+        } else if(game.getCurrentPhase() == HeimlichAndCoPhase.AGENT_MOVE_PHASE) {
+            // Get curr agent
+            Agent curAgent = Agent.values()[game.getCurrentPlayer()];
             // Get curr player pos
             final int curPos = game.getBoard().getAgentsPositions().get(Agent.values()[game.getCurrentPlayer()]);
             // Get die roll (or extract it from the possible actions?)
             final int dieRoll = this.game.getBoard().getLastDieRoll();
 
-            // get possible groups (3 groups)
-            if(this.childGroups.isEmpty()) {
-                this.childGroups.add(new GroupNode(game), 11, 4);
-                this.childGroups.add(new GroupNode(game), 5, 7);
-                this.childGroups.add(new GroupNode(game), 8, 10);
+            // Split possible actions into groups
+            for (HeimlichAndCoAction action : possibleActions) {
+                    HeimlichAndCoAgentMoveAction moveAction = (HeimlichAndCoAgentMoveAction) action;
+                    EnumMap<Agent, Integer> moveActionMap = ActionHelper.getAgentMovesFromMoveAction((HeimlichAndCoAgentMoveAction) action);
+                    int moveAmount = 0;
+                    if(moveActionMap.containsKey(curAgent)) {
+                        moveActionMap.get(curAgent);
+                    }
+                    int newPossiblePos = (curPos + moveAmount) % 12;
+                    if (newPossiblePos >= 4 && newPossiblePos <= 7) {
+                        this.midGroup.add(action);
+                    } else if (newPossiblePos >= 8 && newPossiblePos <= 10) {
+                        this.highGroup.add(action);
+                    } else if ((newPossiblePos >= 0 && newPossiblePos <= 3) || (newPossiblePos == 11)) {
+                        this.lowGroup.add(action);
+                    } else {
+                        throw new IllegalStateException("Action could not be assigned to group, because new position on impossible field");
+                    }
             }
-            // (method) get maximum valued group
-            GroupNode maxGroup = moveGroups.getMaximumValuedGroups();
-            // get maximum valued action in that group
-            maxGroup.getMaximumValuedActions();
 
-            // Continue as usual
+            // Get maximum valued group
+            // by calculating the uct just of a sample of actions of each group
+            ArrayList<HeimlichAndCoAction> bestGroup = this.lowGroup;
+            if(calculateGroupUCT(this.midGroup) > calculateGroupUCT(bestGroup)) {
+                bestGroup = midGroup;
+            }
+            if(calculateGroupUCT(this.highGroup) > calculateGroupUCT(bestGroup)) {
+                bestGroup = highGroup;
+            }
+            if (bestGroup.isEmpty()) {
+                throw new IllegalStateException("There are no actions in the chosen best group");
+            }
 
-            // When Move phase is
-            // Group move actions into groups:
-            // move own agent to a high field
-            // move own agent to a mid field
-            // move own agent to a low field
-            // By filtering moves to the range of tiles it could move when rolled?
-            // Eg. to get into high: 3-6
-            //     to get into medium 2-3
-            //     to get into low 0-1
-
+            List<HeimlichAndCoAction> maximumValuedActions = getMaximumValuedActions(new HashSet<>(bestGroup), this.actionComparatorUct);
+            selectedAction = maximumValuedActions.get(random.nextInt(maximumValuedActions.size()));
+        } else {
             List<HeimlichAndCoAction> maximumValuedActions = getMaximumValuedActions(possibleActions, this.actionComparatorUct);
             selectedAction = maximumValuedActions.get(random.nextInt(maximumValuedActions.size()));
         }
@@ -219,6 +239,52 @@ public class MctsNode {
 
     public int getWins() {
         return this.wins;
+    }
+
+    private double calculateGroupUCT(ArrayList<HeimlichAndCoAction> group) {
+        // Are there already some explored children? Are they at least 3? Take those
+        // Otherwise choose remaining filling up to 3 randomly
+
+        if(group.isEmpty()) {
+             return 0;
+        }
+
+        double groupUCT = 0;
+
+        if (this.children.isEmpty()) {
+            return Double.MAX_VALUE;
+        }
+
+        int sampleCnt = 0;
+        for (HeimlichAndCoAction action : group) {
+            if (this.children.containsKey(action)) {
+                MctsNode child = this.children.get(action);
+                if (child.playouts == 0 || this.playouts == 0) { //this should never happen
+                    throw new IllegalStateException("Illegal 0 value in calculateUCT");
+                }
+                double qSA;
+                if (this.game.getCurrentPlayer() == MctsNode.playerId) {
+                    qSA = ((double) child.wins / child.playouts);
+                } else {
+                    //if the current player is not the player we are maximizing for, we have to 'invert' the wins, as the
+                    //other players of course do not want 'our' player to win. Meaning, they of course don't take the action
+                    //which benefits 'our' player
+                    qSA = ((double) (child.playouts - child.wins) / child.playouts);
+                }
+
+                double nS = this.playouts;
+                double nSA = child.playouts;
+                groupUCT += qSA + C * Math.sqrt(Math.log(nS) / nSA);
+                sampleCnt++;
+            }
+        }
+
+        // If there are less than 33% of actions explored, this group should be explored more
+        if (((double) sampleCnt /group.size()) < 0.33) { // TODO adjust this limit
+            return Double.MAX_VALUE;
+        }
+
+        return groupUCT / sampleCnt;
     }
 
     /**
