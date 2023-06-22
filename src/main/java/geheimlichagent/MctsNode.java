@@ -6,6 +6,8 @@ import heimlich_and_co.HeimlichAndCo;
 import heimlich_and_co.actions.HeimlichAndCoAction;
 import heimlich_and_co.actions.HeimlichAndCoAgentMoveAction;
 import heimlich_and_co.actions.HeimlichAndCoDieRollAction;
+import heimlich_and_co.actions.HeimlichAndCoSafeMoveAction;
+import heimlich_and_co.enums.Agent;
 import heimlich_and_co.enums.Agent;
 import heimlich_and_co.enums.HeimlichAndCoPhase;
 
@@ -335,9 +337,85 @@ public class MctsNode {
 
             double nS = this.playouts;
             double nSA = child.playouts;
-            return qSA + C * Math.sqrt(Math.log(nS) / nSA);
+            double uctValue = qSA + C * Math.sqrt(Math.log(nS) / nSA);
+
+            // Add domain knowledge
+            // TODO discuss if this makes sense for inverted wins as well (enemy)?
+            if (game.getCurrentPhase() == HeimlichAndCoPhase.AGENT_MOVE_PHASE) {
+                uctValue = addFieldValueKnowledge(uctValue, action);
+            }
+
+            if (game.getCurrentPhase() == HeimlichAndCoPhase.SAFE_MOVE_PHASE) {
+                uctValue = addSafeMoveFieldValueKnowledge(uctValue, action);
+            }
+
+            return uctValue;
         }
         return Double.MAX_VALUE;
+    }
+
+    private double addSafeMoveFieldValueKnowledge(double uctValue, HeimlichAndCoAction action) {
+        final HeimlichAndCoSafeMoveAction safeMoveAction = (HeimlichAndCoSafeMoveAction) action;
+        final int newSafePos = ActionHelper.getSafeLocationFromSafeMoveAction(safeMoveAction);
+        if (newSafePos == 11) { // Give incentive to move safe to ruins to penalize the one finding it
+            return uctValue * 1.5;
+        }
+        return uctValue;
+    }
+
+    private double addFieldValueKnowledge(double uctValue, HeimlichAndCoAction action) {
+        HeimlichAndCoAgentMoveAction moveAction = (HeimlichAndCoAgentMoveAction) action;
+        EnumMap<Agent, Integer> movesMap = ActionHelper.getAgentMovesFromMoveAction(moveAction);
+        Agent curAgent = Agent.values()[game.getCurrentPlayer()];
+        int curPos = game.getBoard().getAgentsPositions().get(curAgent);
+        Map<Agent, Integer> agentsPositions = this.game.getBoard().getAgentsPositions();
+
+        int moveAmount = 0;
+        if (movesMap.containsKey(curAgent)) {
+            moveAmount = movesMap.get(curAgent);
+        }
+        int newPos = (moveAmount + curPos) % 12;
+
+        // Give incentive to move to safe when own agents benefits more than enemy agent
+        if(newPos == this.game.getBoard().getSafePosition()) {
+            Map<Integer, Agent> playersToAgents = this.game.getPlayersToAgentsMap();
+
+            // Sum up current possible score of enemy players if the safe were found
+            int enemyScoreSumGain = 0;
+            int ownScoreGain = this.game.getBoard().getPointsForField(agentsPositions.get(curAgent));
+            for (Integer player : playersToAgents.keySet()) {
+                if(player == game.getCurrentPlayer()) {
+                    continue;
+                }
+                Agent enemeyAgent = playersToAgents.get(player);
+                if (agentsPositions.containsKey(enemeyAgent)) {
+                    enemyScoreSumGain += this.game.getBoard().getPointsForField(agentsPositions.get(enemeyAgent));
+                }
+            }
+
+            if (ownScoreGain > enemyScoreSumGain / playersToAgents.size()) {
+                uctValue *= 2;
+            }
+        }
+
+        // Move groups
+        ArrayList<Integer> lowPos = new ArrayList<>(List.of(11, 0, 1, 2, 3)); // 11 is the ruins field (-3)
+        ArrayList<Integer> midPos = new ArrayList<>(List.of(4, 5, 6, 7));
+        ArrayList<Integer> highPos = new ArrayList<>(List.of(8, 9, 10));
+
+        // Boost action where own agent is moved to higher value field or more secure field
+        if (movesMap.containsKey(curAgent)) {
+            if (lowPos.contains(newPos)) {
+                return (uctValue * 0.6);
+            }
+            if (midPos.contains(newPos)) {
+                return (uctValue * 1.7);
+            }
+            if (highPos.contains(newPos)) {
+                return (uctValue * 1.3);
+            }
+        }
+        return uctValue;
     }
 
     /**
