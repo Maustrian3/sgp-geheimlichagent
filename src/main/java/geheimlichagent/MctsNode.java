@@ -169,11 +169,10 @@ public class MctsNode {
 
             // Split possible actions into groups
             for (HeimlichAndCoAction action : possibleActions) {
-                    HeimlichAndCoAgentMoveAction moveAction = (HeimlichAndCoAgentMoveAction) action;
                     EnumMap<Agent, Integer> moveActionMap = ActionHelper.getAgentMovesFromMoveAction((HeimlichAndCoAgentMoveAction) action);
                     int moveAmount = 0;
                     if(moveActionMap.containsKey(curAgent)) {
-                        moveActionMap.get(curAgent);
+                        moveAmount = moveActionMap.get(curAgent);
                     }
                     int newPossiblePos = (curPos + moveAmount) % 12;
                     if (newPossiblePos >= 4 && newPossiblePos <= 7) {
