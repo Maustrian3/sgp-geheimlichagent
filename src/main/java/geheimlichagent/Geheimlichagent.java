@@ -56,10 +56,15 @@ public class Geheimlichagent extends AbstractGameAgent<HeimlichAndCo, HeimlichAn
             MctsNode tree = new MctsNode(0, 0, game, null);
             log.deb("MctsAgent: Doing MCTS");
             while (!this.shouldStopComputation()) {
-                Pair<MctsNode, HeimlichAndCoAction> selectionPair = mctsSelection(tree, SIMULATE_ALL_DIE_OUTCOMES);
-                MctsNode newNode = mctsExpansion(selectionPair.getA(), selectionPair.getB());
-                int win = mctsSimulation(newNode);
-                mctsBackpropagation(newNode, win);
+                try {
+                    Pair<MctsNode, HeimlichAndCoAction> selectionPair = mctsSelection(tree, SIMULATE_ALL_DIE_OUTCOMES);
+                    MctsNode newNode = mctsExpansion(selectionPair.getA(), selectionPair.getB());
+                    int win = mctsSimulation(newNode);
+                    mctsBackpropagation(newNode, win);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    throw e;
+                }
             }
             log.inf("MctsAgent: Playouts done from root node: " + tree.getPlayouts() + "\n");
             log.inf("MctsAgent: Wins/playouts from selected child node: " + tree.getBestChild().getA().getWins() + "/" + tree.getBestChild().getA().getPlayouts() + "\n");
