@@ -1,6 +1,7 @@
 package geheimlichagent;
 
 import heimlich_and_co.actions.HeimlichAndCoAgentMoveAction;
+import heimlich_and_co.actions.HeimlichAndCoSafeMoveAction;
 import heimlich_and_co.enums.Agent;
 
 import java.util.EnumMap;

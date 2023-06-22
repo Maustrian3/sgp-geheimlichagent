@@ -4,7 +4,10 @@ import at.ac.tuwien.ifs.sge.util.pair.ImmutablePair;
 import at.ac.tuwien.ifs.sge.util.pair.Pair;
 import heimlich_and_co.HeimlichAndCo;
 import heimlich_and_co.actions.HeimlichAndCoAction;
+import heimlich_and_co.actions.HeimlichAndCoAgentMoveAction;
 import heimlich_and_co.actions.HeimlichAndCoDieRollAction;
+import heimlich_and_co.actions.HeimlichAndCoSafeMoveAction;
+import heimlich_and_co.enums.Agent;
 import heimlich_and_co.enums.HeimlichAndCoPhase;
 
 import java.util.*;
@@ -92,9 +95,9 @@ public class MctsNode {
         this.playouts++;
         this.wins += win;
         if (this.parent != null) {
-            // TODO maybe simplify action to "moved own agent to field x"
             // Update the averageRewardStats:
             // if player/action pair not in map, add it with win/1 otherwise update it with (win + oldWin)/(oldPlayouts + 1)
+            actionToNode = (actionToNode instanceof HeimlichAndCoAgentMoveAction) ? reduceActionComplexity((HeimlichAndCoAgentMoveAction) actionToNode) : actionToNode;
             averageRewardStats.computeIfAbsent(
                     new ImmutablePair<>(actionToNode, this.game.getCurrentPlayer()),
                     k -> new ImmutablePair<>((double) win, 1));
@@ -103,6 +106,18 @@ public class MctsNode {
                     (k, v) -> new ImmutablePair<>((v.getA() + win), v.getB() + 1));
             this.parent.backpropagation(win, averageRewardStats);
         }
+    }
+
+    private HeimlichAndCoAction reduceActionComplexity(HeimlichAndCoAgentMoveAction action) {
+        Agent curAgent = Agent.values()[game.getCurrentPlayer()];
+        EnumMap<Agent, Integer> moveActionMap = ActionHelper.getAgentMovesFromMoveAction(action);
+        EnumMap<Agent, Integer> moveActionMapCurPlayer = new EnumMap<>(Agent.class);
+        int moveAmount = 0;
+        if(moveActionMap.containsKey(curAgent)) {
+            moveAmount = moveActionMap.get(curAgent);
+        }
+        moveActionMapCurPlayer.put(curAgent, moveAmount);
+        return new HeimlichAndCoAgentMoveAction(moveActionMapCurPlayer) ;
     }
 
     /**
@@ -222,7 +237,6 @@ public class MctsNode {
 
         if (this.children.containsKey(action)) {
             MctsNode child = this.children.get(action);
-            // an child is expanded but has no playout
             if (child.playouts == 0 || this.playouts == 0) { //this should never happen
                 throw new IllegalStateException("Illegal 0 value in calculateUCT");
             }
