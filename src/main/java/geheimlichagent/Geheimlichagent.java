@@ -140,14 +140,20 @@ public class Geheimlichagent extends AbstractGameAgent<HeimlichAndCo, HeimlichAn
         }
 
         Map<Agent, Integer> scores = game.getBoard().getScores();
+        Map<Integer, Agent> playersToAgentsMap = game.getPlayersToAgentsMap();
         int maxValue = 0;
-        for (int i : scores.values()) {
-            if (i > maxValue) {
-                maxValue = i;
+        Agent winningAgent = playersToAgentsMap.get(this.playerId);
+        for (var entry : scores.entrySet()) {
+            Agent agent = entry.getKey();
+            if (scores.get(agent) > maxValue) {
+                maxValue = scores.get(agent);
+                winningAgent = agent;
             }
         }
         //the game is regarded as won if the player has the highest score
-        if (maxValue == scores.get(game.getPlayersToAgentsMap().get(this.playerId))) {
+        if (winningAgent == playersToAgentsMap.get(this.playerId)) {
+            return 2;
+        } else if (!playersToAgentsMap.containsValue(winningAgent)) {
             return 1;
         } else {
             return 0;
