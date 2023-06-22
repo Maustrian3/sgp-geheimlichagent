@@ -3,6 +3,7 @@ package geheimlichagent;
 import at.ac.tuwien.ifs.sge.agent.AbstractGameAgent;
 import at.ac.tuwien.ifs.sge.agent.GameAgent;
 import at.ac.tuwien.ifs.sge.engine.Logger;
+import at.ac.tuwien.ifs.sge.util.pair.ImmutablePair;
 import at.ac.tuwien.ifs.sge.util.pair.Pair;
 import heimlich_and_co.HeimlichAndCo;
 import heimlich_and_co.actions.HeimlichAndCoAction;
@@ -31,9 +32,26 @@ public class Geheimlichagent extends AbstractGameAgent<HeimlichAndCo, HeimlichAn
      */
     private static final boolean SIMULATE_ALL_DIE_OUTCOMES = true;
 
+    /**
+     * Boltzmann constant
+     * sqrt of 2 in the first test
+     */
+    private static final double k = Math.sqrt(2);
+    ;
+
     public Geheimlichagent(Logger logger) {
         super(logger);
     }
+
+    /**
+     * Average reward statistic for each action+player pair -> reward+visit count pair, use in simulation.
+     *
+     */
+    private final Map<ImmutablePair<HeimlichAndCoAction, Integer>, ImmutablePair<Double, Integer>> averageRewardStats = new HashMap<>();
+    // Reduced complexity of the statistic with only player X moves his own agent to field Y
+    //private final Map<ImmutablePair<Integer, Integer>, ImmutablePair<Double, Integer>> averageRewardStats = new HashMap<>();
+
+    private final Comparator<ImmutablePair<HeimlichAndCoAction, Integer>> actionComparatorBoltz = Comparator.comparingDouble(this::calcBoltzmann);
 
     @Override
     public HeimlichAndCoAction computeNextAction(HeimlichAndCo game, long l, TimeUnit timeUnit) {
@@ -56,10 +74,15 @@ public class Geheimlichagent extends AbstractGameAgent<HeimlichAndCo, HeimlichAn
             MctsNode tree = new MctsNode(0, 0, game, null);
             log.deb("MctsAgent: Doing MCTS");
             while (!this.shouldStopComputation()) {
-                Pair<MctsNode, HeimlichAndCoAction> selectionPair = mctsSelection(tree, SIMULATE_ALL_DIE_OUTCOMES);
-                MctsNode newNode = mctsExpansion(selectionPair.getA(), selectionPair.getB());
-                int win = mctsSimulation(newNode);
-                mctsBackpropagation(newNode, win);
+                try {
+                    Pair<MctsNode, HeimlichAndCoAction> selectionPair = mctsSelection(tree, SIMULATE_ALL_DIE_OUTCOMES);
+                    MctsNode newNode = mctsExpansion(selectionPair.getA(), selectionPair.getB());
+                    int win = mctsSimulation(newNode);
+                    mctsBackpropagation(newNode, win);
+                } catch (Exception exception) {
+                    exception.printStackTrace();
+                    log.err(exception);
+                }
             }
             log.inf("MctsAgent: Playouts done from root node: " + tree.getPlayouts() + "\n");
             log.inf("MctsAgent: Wins/playouts from selected child node: " + tree.getBestChild().getA().getWins() + "/" + tree.getBestChild().getA().getPlayouts() + "\n");
@@ -104,7 +127,7 @@ public class Geheimlichagent extends AbstractGameAgent<HeimlichAndCo, HeimlichAn
 
     private void mctsBackpropagation(MctsNode node, int win) {
         log.deb("MctsAgent: In Backpropagation\n");
-        node.backpropagation(win);
+        node.backpropagation(win, averageRewardStats);
     }
 
     private MctsNode mctsExpansion(MctsNode node, HeimlichAndCoAction action) {
@@ -122,7 +145,7 @@ public class Geheimlichagent extends AbstractGameAgent<HeimlichAndCo, HeimlichAn
      * easier to handle how much time there is (left) for computation before timing out.
      *
      * @param node from where simulation should take place
-     * @return 1 or 0, depending on whether the agent belonging to the player of this agent wins
+     * @return 2, 1 or 0, depending on whether the agent belonging to the player of this agent wins/draws/loses
      */
     private int mctsSimulation(MctsNode node) {
         log.deb("MctsAgent: In Simulation\n");
@@ -134,7 +157,9 @@ public class Geheimlichagent extends AbstractGameAgent<HeimlichAndCo, HeimlichAn
                 break;
             }
             Set<HeimlichAndCoAction> possibleActions = game.getPossibleActions();
-            HeimlichAndCoAction selectedAction = possibleActions.toArray(new HeimlichAndCoAction[1])[super.random.nextInt(possibleActions.size())];
+            List<HeimlichAndCoAction> maximumValuedActions = getMaximumValuedActions(possibleActions, game.getCurrentPlayer(), this.actionComparatorBoltz);
+            HeimlichAndCoAction selectedAction = maximumValuedActions.get(random.nextInt(maximumValuedActions.size()));
+//            HeimlichAndCoAction selectedAction = possibleActions.toArray(new HeimlichAndCoAction[1])[super.random.nextInt(possibleActions.size())];
             game.applyAction(selectedAction);
             simulationDepth++;
         }
@@ -146,11 +171,47 @@ public class Geheimlichagent extends AbstractGameAgent<HeimlichAndCo, HeimlichAn
                 maxValue = i;
             }
         }
+        // Check if scores contains the maxValue more than once
+        if (Collections.frequency(scores.values(), maxValue) > 1) {
+            return 1; // Draw
+        }
         //the game is regarded as won if the player has the highest score
         if (maxValue == scores.get(game.getPlayersToAgentsMap().get(this.playerId))) {
-            return 1;
-        } else {
+            return 2; // Won
+        }
+        return 0; // Lost
+    }
+
+    private double calcBoltzmann(ImmutablePair<HeimlichAndCoAction, Integer> actionPlayerPair) {
+        ImmutablePair<Double, Integer> rewardStats = averageRewardStats.get(actionPlayerPair);
+        if (rewardStats == null) {
             return 0;
         }
+        return Math.exp((rewardStats.getA()) / (k * rewardStats.getB()));
+    }
+
+    /**
+     * Gets the actions which have the maximum value according to some comparator. If multiple actions have the same
+     * (maximum) value, all of them will be contained in the returned list.
+     * This method runs in O(n) where n is the number of actions
+     *
+     * @param actions    possible actions in the current game state
+     * @param comparator comparator which should be used to compare two actions (e.g. tree policy like UCT)
+     * @return a List of actions which have the maximum value when compared with the given Comparator
+     */
+    private static List<HeimlichAndCoAction> getMaximumValuedActions(Set<HeimlichAndCoAction> actions, Integer player, Comparator<ImmutablePair<HeimlichAndCoAction, Integer>> comparator) {
+        List<HeimlichAndCoAction> selectedActions = new LinkedList<>();
+        for (HeimlichAndCoAction action : actions) {
+            if (selectedActions.isEmpty()) { //this is only true in the first iteration
+                selectedActions.add(action);
+            } else if (comparator.compare(new ImmutablePair<>(selectedActions.get(0), player), new ImmutablePair<>(action, player)) == 0) { //the current action is equal
+                selectedActions.add(action);
+            } else if (comparator.compare(new ImmutablePair<>(selectedActions.get(0), player), new ImmutablePair<>(action, player)) < 0) { //the current action has a larger value
+                //i.e. clear the list and add the current action to it
+                selectedActions = new LinkedList<>();
+                selectedActions.add(action);
+            }
+        }
+        return selectedActions;
     }
 }

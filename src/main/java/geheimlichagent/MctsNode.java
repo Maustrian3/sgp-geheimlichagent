@@ -31,6 +31,10 @@ public class MctsNode {
      */
     private final HeimlichAndCo game;
     /**
+     * The action taken that lead to this node.
+     */
+    private HeimlichAndCoAction actionToNode;
+    /**
      * All resulting child states that have been explored at least once.
      * A child node is reached by taking (applying) the action that is used as the key.
      */
@@ -49,6 +53,7 @@ public class MctsNode {
      * saves how many playouts were done from this node (or descendents of this node)
      */
     private int playouts;
+
     private final Comparator<HeimlichAndCoAction> actionComparatorUct = Comparator.comparingDouble(this::calculateUCT);
     private final Comparator<HeimlichAndCoAction> actionComparatorQsa = Comparator.comparingDouble(this::calculateQsaOfChild);
 
@@ -78,16 +83,25 @@ public class MctsNode {
      * Does backpropagation starting from the current node.
      * Therefore, always increases playouts and increases wins depending on win.
      *
-     * @param win indicating whether the game was won or not (1 on win, 0 on loss).
+     * @param win indicating whether the game was won or not (2 on win, 1 on draw, 0 on loss).
      */
-    public void backpropagation(int win) {
-        if (win != 0 && win != 1) {
-            throw new IllegalArgumentException("Win must be either 1 or 0");
+    public void backpropagation(int win, Map<ImmutablePair<HeimlichAndCoAction, Integer>, ImmutablePair<Double, Integer>> averageRewardStats) {
+        if (win != 0 && win != 1 && win != 2) {
+            throw new IllegalArgumentException("Win must be either 0, 1 or 2");
         }
         this.playouts++;
         this.wins += win;
         if (this.parent != null) {
-            this.parent.backpropagation(win);
+            // TODO maybe simplify action to "moved own agent to field x"
+            // Update the averageRewardStats:
+            // if player/action pair not in map, add it with win/1 otherwise update it with (win + oldWin)/(oldPlayouts + 1)
+            averageRewardStats.computeIfAbsent(
+                    new ImmutablePair<>(actionToNode, this.game.getCurrentPlayer()),
+                    k -> new ImmutablePair<>((double) win, 1));
+            averageRewardStats.computeIfPresent(
+                    new ImmutablePair<>(actionToNode, this.game.getCurrentPlayer()),
+                    (k, v) -> new ImmutablePair<>((v.getA() + win), v.getB() + 1));
+            this.parent.backpropagation(win, averageRewardStats);
         }
     }
 
@@ -129,6 +143,7 @@ public class MctsNode {
         }
         MctsNode newNode = new MctsNode(game.doAction(action), this);
         this.children.put(action, newNode);
+        newNode.actionToNode = action;
         return newNode;
     }
 
@@ -207,6 +222,7 @@ public class MctsNode {
 
         if (this.children.containsKey(action)) {
             MctsNode child = this.children.get(action);
+            // an child is expanded but has no playout
             if (child.playouts == 0 || this.playouts == 0) { //this should never happen
                 throw new IllegalStateException("Illegal 0 value in calculateUCT");
             }
