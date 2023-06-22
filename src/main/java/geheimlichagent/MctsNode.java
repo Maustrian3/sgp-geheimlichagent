@@ -9,6 +9,8 @@ import heimlich_and_co.actions.HeimlichAndCoDieRollAction;
 import heimlich_and_co.actions.HeimlichAndCoSafeMoveAction;
 import heimlich_and_co.enums.Agent;
 import heimlich_and_co.enums.Agent;
+import heimlich_and_co.actions.HeimlichAndCoSafeMoveAction;
+import heimlich_and_co.enums.Agent;
 import heimlich_and_co.enums.HeimlichAndCoPhase;
 
 import java.util.*;
@@ -35,6 +37,10 @@ public class MctsNode {
      */
     private final HeimlichAndCo game;
     /**
+     * The action taken that lead to this node.
+     */
+    private HeimlichAndCoAction actionToNode;
+    /**
      * All resulting child states that have been explored at least once.
      * A child node is reached by taking (applying) the action that is used as the key.
      */
@@ -59,6 +65,7 @@ public class MctsNode {
      * saves how many playouts were done from this node (or descendents of this node)
      */
     public int playouts;
+
     private final Comparator<HeimlichAndCoAction> actionComparatorUct = Comparator.comparingDouble(this::calculateUCT);
     private final Comparator<HeimlichAndCoAction> actionComparatorQsa = Comparator.comparingDouble(this::calculateQsaOfChild);
 
@@ -91,17 +98,38 @@ public class MctsNode {
      * Does backpropagation starting from the current node.
      * Therefore, always increases playouts and increases wins depending on win.
      *
-     * @param win indicating whether the game was won or not (1 on win, 0 on loss).
+     * @param win indicating whether the game was won or not (2 on win, 1 on draw, 0 on loss).
      */
-    public void backpropagation(int win) {
-        if (win != 0 && win != 1) {
-            throw new IllegalArgumentException("Win must be either 1 or 0");
+    public void backpropagation(int win, Map<ImmutablePair<HeimlichAndCoAction, Integer>, ImmutablePair<Double, Integer>> averageRewardStats) {
+        if (win != 0 && win != 1 && win != 2) {
+            throw new IllegalArgumentException("Win must be either 0, 1 or 2");
         }
         this.playouts++;
         this.wins += win;
         if (this.parent != null) {
-            this.parent.backpropagation(win);
+            // Update the averageRewardStats:
+            // if player/action pair not in map, add it with win/1 otherwise update it with (win + oldWin)/(oldPlayouts + 1)
+            actionToNode = (actionToNode instanceof HeimlichAndCoAgentMoveAction) ? reduceActionComplexity((HeimlichAndCoAgentMoveAction) actionToNode) : actionToNode;
+            averageRewardStats.computeIfAbsent(
+                    new ImmutablePair<>(actionToNode, this.game.getCurrentPlayer()),
+                    k -> new ImmutablePair<>((double) win, 1));
+            averageRewardStats.computeIfPresent(
+                    new ImmutablePair<>(actionToNode, this.game.getCurrentPlayer()),
+                    (k, v) -> new ImmutablePair<>((v.getA() + win), v.getB() + 1));
+            this.parent.backpropagation(win, averageRewardStats);
         }
+    }
+
+    private HeimlichAndCoAction reduceActionComplexity(HeimlichAndCoAgentMoveAction action) {
+        Agent curAgent = Agent.values()[game.getCurrentPlayer()];
+        EnumMap<Agent, Integer> moveActionMap = ActionHelper.getAgentMovesFromMoveAction(action);
+        EnumMap<Agent, Integer> moveActionMapCurPlayer = new EnumMap<>(Agent.class);
+        int moveAmount = 0;
+        if(moveActionMap.containsKey(curAgent)) {
+            moveAmount = moveActionMap.get(curAgent);
+        }
+        moveActionMapCurPlayer.put(curAgent, moveAmount);
+        return new HeimlichAndCoAgentMoveAction(moveActionMapCurPlayer) ;
     }
 
     /**
@@ -142,6 +170,7 @@ public class MctsNode {
         }
         MctsNode newNode = new MctsNode(game.doAction(action), this);
         this.children.put(action, newNode);
+        newNode.actionToNode = action;
         return newNode;
     }
 
